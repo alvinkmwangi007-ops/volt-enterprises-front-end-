@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app'
 import {
   createUserWithEmailAndPassword,
   getAuth,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithPopup,
@@ -76,6 +77,16 @@ export async function firebaseSignUp(email, password) {
     const credential = await createUserWithEmailAndPassword(auth, email, password)
     return await credential.user.getIdToken()
   } catch (error) {
+    throw friendlyError(error)
+  }
+}
+
+export async function firebaseResetPassword(email) {
+  try {
+    await sendPasswordResetEmail(auth, email, { url: window.location.origin })
+  } catch (error) {
+    // Do not reveal whether an account exists for this email.
+    if (error?.code === 'auth/user-not-found') return
     throw friendlyError(error)
   }
 }

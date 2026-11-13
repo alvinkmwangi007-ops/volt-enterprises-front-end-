@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import AnimatedDropdown from './components/AnimatedDropdown'
 import { apiDownload, apiRequest, apiUrl, clearAuthSession, getAccessToken, saveAuthSession } from './api'
-import { firebaseGoogle, firebaseSignIn, firebaseSignOut, firebaseSignUp } from './firebase'
+import { firebaseGoogle, firebaseResetPassword, firebaseSignIn, firebaseSignOut, firebaseSignUp } from './firebase'
 import './App.css'
 
 const OTHER_OPTION = '__other__'
@@ -833,6 +833,25 @@ function App() {
                 <span>Password</span>
                 <input type="password" name="loginPassword" autoComplete="current-password" required />
               </label>
+            <button
+              className="link-button"
+              type="button"
+              onClick={async (event) => {
+                const email = String(new FormData(event.currentTarget.form).get('loginEmail') || '').trim().toLowerCase()
+                if (!email) {
+                  setSellerAuthStatus('Enter your email address above, then click Forgot password.')
+                  return
+                }
+                try {
+                  await firebaseResetPassword(email)
+                  setSellerAuthStatus('If an account exists for that email, a password reset link has been sent.')
+                } catch (error) {
+                  setSellerAuthStatus(error.message)
+                }
+              }}
+            >
+              Forgot password?
+            </button>
             <div className="auth-divider"><span>or</span></div>
             <button
               className="google-button"
@@ -1340,6 +1359,25 @@ function App() {
                 <span>Password</span>
                 <input type="password" name="buyerLoginPassword" autoComplete="current-password" required />
               </label>
+            <button
+              className="link-button"
+              type="button"
+              onClick={async (event) => {
+                const email = String(new FormData(event.currentTarget.form).get('buyerLoginEmail') || '').trim().toLowerCase()
+                if (!email) {
+                  setBuyerAuthStatus('Enter your email address above, then click Forgot password.')
+                  return
+                }
+                try {
+                  await firebaseResetPassword(email)
+                  setBuyerAuthStatus('If an account exists for that email, a password reset link has been sent.')
+                } catch (error) {
+                  setBuyerAuthStatus(error.message)
+                }
+              }}
+            >
+              Forgot password?
+            </button>
             <div className="auth-divider"><span>or</span></div>
             <button
               className="google-button"
