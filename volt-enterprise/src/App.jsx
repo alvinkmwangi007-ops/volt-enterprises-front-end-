@@ -182,9 +182,11 @@ function App() {
         await inventoryRequest
         return
       }
+      const userRequest = apiRequest('/users/me')
+      userRequest.catch(() => {})
       await inventoryRequest
       try {
-        const user = await apiRequest('/users/me')
+        const user = await userRequest
         if (!isMounted) return
         setCurrentUser(user)
         setUserRole(user.role)
