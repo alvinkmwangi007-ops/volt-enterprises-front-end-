@@ -36,7 +36,7 @@ const ERROR_MESSAGES = {
   'auth/too-many-requests': 'Too many attempts. Try again later.',
   'auth/network-request-failed': 'Network error. Check your connection and try again.',
   'auth/unauthorized-domain': 'This website address is not authorised for Google sign-in. Add it under Firebase Console > Authentication > Settings > Authorized domains.',
-  'auth/operation-not-allowed': 'Google sign-in is not enabled. Enable it under Firebase Console > Authentication > Sign-in method.',
+  'auth/operation-not-allowed': 'This sign-in method is not enabled in Firebase (Authentication > Sign-in method).',
   'auth/invalid-api-key': 'Firebase API key is invalid. Check the VITE_FIREBASE_* settings.',
   'auth/internal-error': 'Firebase reported an internal error. Check the browser console for details.',
 }
