@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import AnimatedDropdown from './components/AnimatedDropdown'
 import { apiDownload, apiRequest, apiUrl, clearAuthSession, getAccessToken, saveAuthSession } from './api'
+import { firebaseGoogle, firebaseSignIn, firebaseSignOut, firebaseSignUp } from './firebase'
 import './App.css'
 
 const OTHER_OPTION = '__other__'
@@ -53,6 +54,30 @@ function mapCar(car) {
   }
 }
 
+function formatUploadTime(value) {
+  if (!value) return '—'
+  // The server stores naive UTC timestamps.
+  const date = new Date(/(Z|[+-]\d\d:?\d\d)$/.test(value) ? value : `${value}Z`)
+  if (Number.isNaN(date.getTime())) return '—'
+  return (
+    <>
+      <span>{date.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+      <small>{date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</small>
+    </>
+  )
+}
+
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z" />
+      <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z" />
+      <path fill="#FBBC05" d="M10.5 28.7a14.5 14.5 0 0 1 0-9.4l-7.9-6.1a24 24 0 0 0 0 21.6l7.9-6.1z" />
+      <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z" />
+    </svg>
+  )
+}
+
 function App() {
   const [userRole, setUserRole] = useState('guest')
   const [currentUser, setCurrentUser] = useState(null)
@@ -86,8 +111,7 @@ function App() {
   const [sellerAuthStatus, setSellerAuthStatus] = useState('')
   const [buyerAuthMode, setBuyerAuthMode] = useState('login')
   const [buyerAuthStatus, setBuyerAuthStatus] = useState('')
-  const [managerAuthStatus, setManagerAuthStatus] = useState('')
-  const [managerCreationStatus, setManagerCreationStatus] = useState('')
+  const [googleSignup, setGoogleSignup] = useState(null)
   const [listingMakeChoice, setListingMakeChoice] = useState('')
   const [listingCustomMake, setListingCustomMake] = useState('')
   const [listingModelChoice, setListingModelChoice] = useState('')
@@ -224,7 +248,7 @@ function App() {
     Promise.all([apiRequest('/users'), apiRequest('/deals')])
       .then(([users, deals]) => {
         if (!isMounted) return
-        setCustomers(users.filter((user) => user.role === 'buyer'))
+        setCustomers(users.filter((user) => user.role === 'buyer' || user.role === 'seller'))
         setSalesData(deals
           .filter((deal) => deal.status === 'completed')
           .slice()
@@ -278,7 +302,7 @@ function App() {
   }, [selectedVehicle, chatVehicle])
 
   const navItems = useMemo(() => [
-    ...(userRole === 'admin' ? [{ label: 'Dashboard', view: 'Dashboard' }] : []),
+    ...(userRole === 'admin' ? [{ label: 'Cashflow Overview', view: 'Dashboard' }] : []),
     { label: 'Inventory', view: 'Inventory' },
     ...(userRole === 'admin' ? [{ label: 'Customers', view: 'Customers' }] : []),
     ...(userRole === 'admin' ? [{ label: 'Documents', view: 'Documents' }] : []),
@@ -286,9 +310,8 @@ function App() {
     ...(userRole === 'guest' ? [
       { label: 'Buyer Login', view: 'Buyer Login' },
       { label: 'Seller Login', view: 'Seller Login' },
-      { label: 'Manager Login', view: 'Manager Login' },
     ] : []),
-    ...(userRole !== 'guest' ? [{ label: 'Settings', view: 'Settings' }] : []),
+    ...(userRole !== 'guest' && userRole !== 'admin' ? [{ label: 'Settings', view: 'Settings' }] : []),
   ], [userRole])
 
   const maxValue = Math.max(1, ...salesData.flatMap(({ income, expenses }) => [income, expenses]))
@@ -304,6 +327,7 @@ function App() {
 
   const logout = () => {
     clearAuthSession()
+    firebaseSignOut()
     setCurrentUser(null)
     setUserRole('guest')
     setSelectedVehicle(null)
@@ -555,6 +579,7 @@ function App() {
             <span className="legend-item expenses"><i />Expenses</span>
           </div>
 
+          <button className="seller-logout-button" type="button" onClick={logout}>Log out</button>
           <div className="toggle-buttons">
             <button
               type="button"
@@ -579,80 +604,56 @@ function App() {
         <button type="button" onClick={exportPdf}>Export PDF</button>
       </div>
 
+      <div className="cashflow-summary">
+        <div><span>Total income</span><strong>KES {salesData.reduce((sum, item) => sum + item.income, 0).toLocaleString()}</strong></div>
+        <div><span>Total expenses</span><strong>KES {salesData.reduce((sum, item) => sum + item.expenses, 0).toLocaleString()}</strong></div>
+        <div><span>Net</span><strong>KES {salesData.reduce((sum, item) => sum + item.income - item.expenses, 0).toLocaleString()}</strong></div>
+      </div>
+
       <div className="cashflow-card">
         {salesData.length === 0 && <p className="seller-privacy-note">No completed sales data is available yet.</p>}
         {salesData.length > 0 && <p className="seller-privacy-note">Operating expenses are not tracked by the backend yet.</p>}
         <div className="chart-area">
-          {[3000, 2000, 1000, 0].map((label) => (
-            <div key={label} className="grid-row" style={{ '--label-value': `${label}` }}>
-              <span>KES {Math.round((maxValue * label) / 3000).toLocaleString()}</span>
-            </div>
-          ))}
-
           <svg viewBox="0 0 1000 420" className="chart-svg" role="img" aria-label="Sales chart">
-            {chartType === 'bars' ? (
-              salesData.map((item, index) => {
-                const x = 120 + index * 180
-                const incomeHeight = (item.income / maxValue) * 300
-                const expenseHeight = (item.expenses / maxValue) * 300
-                const incomeY = 320 - incomeHeight
-                const expenseY = 320 - expenseHeight
-                const isActive = index === salesData.length - 1
-
+            {[0, 1, 2, 3, 4].map((tick) => {
+              const y = 340 - tick * 70
+              return (
+                <g key={tick}>
+                  <line x1="110" x2="980" y1={y} y2={y} stroke="#d5dbe8" strokeWidth="1.5" strokeDasharray={tick === 0 ? '0' : '6 6'} />
+                  <text x="98" y={y + 6} textAnchor="end" fill="#65748b" fontSize="18">{Math.round((maxValue * tick) / 4).toLocaleString()}</text>
+                </g>
+              )
+            })}
+            {salesData.map((item, index) => {
+              const slot = 870 / salesData.length
+              const cx = 110 + slot * index + slot / 2
+              const barW = Math.min(46, slot / 3)
+              const incomeH = (item.income / maxValue) * 280
+              const expenseH = (item.expenses / maxValue) * 280
+              const label = <text x={cx} y={382} textAnchor="middle" fill="#2d3748" fontSize="20">{item.week}</text>
+              if (chartType === 'bars') {
                 return (
                   <g key={item.week}>
-                    <rect
-                      x={x - 42}
-                      y={incomeY}
-                      width={52}
-                      height={incomeHeight}
-                      rx={26}
-                      fill="#3d5ef5"
-                      className={isActive ? 'active-bar' : ''}
-                    />
-                    <rect
-                      x={x + 12}
-                      y={expenseY}
-                      width={52}
-                      height={expenseHeight}
-                      rx={26}
-                      fill="#dfe7ff"
-                    />
-                    <text x={x} y={390} textAnchor="middle" fill="#2d3748" fontSize="26">{item.week}</text>
+                    <rect x={cx - barW - 4} y={340 - incomeH} width={barW} height={incomeH} rx={Math.min(10, barW / 2)} fill="#3d5ef5" />
+                    <rect x={cx + 4} y={340 - expenseH} width={barW} height={expenseH} rx={Math.min(10, barW / 2)} fill="#c7d3ff" />
+                    {label}
                   </g>
                 )
-              })
-            ) : (
-              <>
-                <path
-                  d={salesData
-                    .map((item, index) => {
-                      const x = 120 + index * 180
-                      const y = 320 - (item.income / maxValue) * 300
-                      return `${index === 0 ? 'M' : 'L'} ${x} ${y}`
-                    })
-                    .join(' ')}
-                  fill="none"
-                  stroke="#3d5ef5"
-                  strokeWidth="5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="line-path"
-                />
-                {salesData.map((item, index) => {
-                  const x = 120 + index * 180
-                  const y = 320 - (item.income / maxValue) * 300
-                  return <circle key={item.week} cx={x} cy={y} r="6" fill="#3d5ef5" />
-                })}
-                {salesData.map((item, index) => {
-                  const x = 120 + index * 180
-                  const y = 320 - (item.expenses / maxValue) * 300
-                  return <circle key={`${item.week}-expense`} cx={x} cy={y} r="6" fill="#dfe7ff" />
-                })}
-              </>
-            )}
+              }
+              return <g key={item.week}>{label}</g>
+            })}
+            {chartType === 'lines' && salesData.length > 0 && ['income', 'expenses'].map((key) => {
+              const slot = 870 / salesData.length
+              const points = salesData.map((item, index) => [110 + slot * index + slot / 2, 340 - (item[key] / maxValue) * 280])
+              const color = key === 'income' ? '#3d5ef5' : '#9fb3ff'
+              return (
+                <g key={key}>
+                  <path d={points.map(([x, y], index) => `${index === 0 ? 'M' : 'L'} ${x} ${y}`).join(' ')} fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                  {points.map(([x, y]) => <circle key={`${key}-${x}`} cx={x} cy={y} r="6" fill={color} />)}
+                </g>
+              )
+            })}
           </svg>
-
         </div>
       </div>
     </section>
@@ -662,73 +663,35 @@ function App() {
     <section className="content">
       <h1>Customers</h1>
       {inventoryStatus && <p className="seller-form-status" role="alert">{inventoryStatus}</p>}
-      <div className="customer-list-wrap">
-        <table className="customer-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Phone</th>
-              <th>City</th>
-            </tr>
-          </thead>
-          <tbody>
-            {customers.map((customer) => (
-              <tr key={customer.id}>
-                <td>{customer.full_name}</td>
-                <td>{customer.email}</td>
-                <td>{customer.phone_number}</td>
-                <td>—</td>
-              </tr>
-            ))}
-            {customers.length === 0 && <tr><td colSpan="4">No registered buyers yet.</td></tr>}
-          </tbody>
-        </table>
-      </div>
-      {userRole === 'admin' && (
-        <form
-          className="seller-form manager-create-form"
-          onSubmit={async (event) => {
-            event.preventDefault()
-            const values = new FormData(event.currentTarget)
-            try {
-              await apiRequest('/users/managers', {
-                method: 'POST',
-                body: JSON.stringify({
-                  full_name: values.get('managerName'),
-                  email: values.get('managerEmail'),
-                  phone_number: values.get('managerPhone'),
-                  password: values.get('managerPassword'),
-                }),
-              })
-              event.currentTarget.reset()
-              setManagerCreationStatus('Manager account created.')
-            } catch (error) {
-              setManagerCreationStatus(error.message)
-            }
-          }}
-        >
-          <h2>Create manager account</h2>
-          <label className="seller-field">
-            <span>Full name</span>
-            <input type="text" name="managerName" required />
-          </label>
-          <label className="seller-field">
-            <span>Email</span>
-            <input type="email" name="managerEmail" required />
-          </label>
-          <label className="seller-field">
-            <span>Phone number</span>
-            <input type="tel" name="managerPhone" required />
-          </label>
-          <label className="seller-field">
-            <span>Temporary password (at least 12 characters)</span>
-            <input type="password" name="managerPassword" minLength={12} autoComplete="new-password" required />
-          </label>
-          <button className="seller-primary-button" type="submit">Create manager</button>
-          <p className="seller-form-status" role="status" aria-live="polite">{managerCreationStatus}</p>
-        </form>
-      )}
+      {[['buyer', 'Buyers'], ['seller', 'Sellers']].map(([role, title]) => {
+        const rows = customers.filter((customer) => customer.role === role)
+        return (
+          <div className="customer-list-wrap" key={role}>
+            <h2 className="customer-group-title">{title} <span>({rows.length})</span></h2>
+            <table className="customer-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th>City</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((customer) => (
+                  <tr key={customer.id}>
+                    <td>{customer.full_name}</td>
+                    <td>{customer.email}</td>
+                    <td>{customer.phone_number}</td>
+                    <td>{customer.location || '—'}</td>
+                  </tr>
+                ))}
+                {rows.length === 0 && <tr><td colSpan="4">No registered {title.toLowerCase()} yet.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )
+      })}
     </section>
   )
 
@@ -741,7 +704,7 @@ function App() {
         <p className="seller-privacy-note">No seller documents have been uploaded.</p>
       )}
       <div className="customer-list-wrap">
-        <table className="customer-table">
+        <table className="customer-table documents-table">
           <thead>
             <tr><th>Vehicle</th><th>Seller</th><th>Document</th><th>Uploaded</th><th>Access</th></tr>
           </thead>
@@ -751,7 +714,7 @@ function App() {
                 <td>{privateFile.vehicle}</td>
                 <td>{privateFile.seller_name}<br />{privateFile.seller_email}</td>
                 <td>{privateFile.label} · {privateFile.original_name}</td>
-                <td>{privateFile.created_at ? new Date(privateFile.created_at).toLocaleDateString() : '—'}</td>
+                <td className="upload-time">{formatUploadTime(privateFile.created_at)}</td>
                 <td>
                   <button
                     className="seller-secondary-button"
@@ -823,15 +786,16 @@ function App() {
             onSubmit={async (event) => {
               event.preventDefault()
               const formData = new FormData(event.currentTarget)
-              const phone = String(formData.get('loginPhone') || '').trim()
-              const otp = String(formData.get('loginOtp') || '')
+              const loginEmail = String(formData.get('loginEmail') || '').trim().toLowerCase()
+              const loginPassword = String(formData.get('loginPassword') || '')
               try {
-                const authResponse = await apiRequest('/auth/otp/verify', {
+                const idToken = await firebaseSignIn(loginEmail, loginPassword)
+                const authResponse = await apiRequest('/auth/firebase/login', {
                   method: 'POST',
-                  body: JSON.stringify({ phone_number: phone, otp }),
+                  body: JSON.stringify({ id_token: idToken }),
                 })
                 if (authResponse.user.role !== 'seller') {
-                  setSellerAuthStatus('This verified phone number is not registered as a seller account.')
+                  setSellerAuthStatus('This account is not registered as a seller account.')
                   return
                 }
                 establishSession(authResponse)
@@ -843,51 +807,40 @@ function App() {
           >
             <div className="seller-form-heading">
               <h2>Welcome back</h2>
-              <p>Use the mobile number registered to your seller account.</p>
+              <p>Sign in with your seller account email and password.</p>
             </div>
             <label className="seller-field">
-              <span>Mobile phone number</span>
-              <input
-                type="tel"
-                name="loginPhone"
-                autoComplete="tel"
-                placeholder="+254 7XX XXX XXX"
-                required
-              />
-            </label>
-            <div className="seller-otp-field">
-              <label className="seller-field">
-                <span>One-time password (OTP)</span>
-                <input
-                  type="text"
-                  name="loginOtp"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  placeholder="6-digit code"
-                  required
-                />
+                <span>Email address</span>
+                <input type="email" name="loginEmail" autoComplete="username" required />
               </label>
-              <button
-                className="seller-secondary-button"
-                type="button"
-                onClick={async (event) => {
-                  const phone = event.currentTarget.form.elements.loginPhone.value.trim()
-                  try {
-                    const result = await apiRequest('/auth/otp/request', {
-                      method: 'POST',
-                      body: JSON.stringify({ phone_number: phone, purpose: 'login' }),
-                    })
-                    setSellerAuthStatus(result.message)
-                  } catch (error) {
-                    setSellerAuthStatus(error.message)
+              <label className="seller-field">
+                <span>Password</span>
+                <input type="password" name="loginPassword" autoComplete="current-password" required />
+              </label>
+            <div className="auth-divider"><span>or</span></div>
+            <button
+              className="google-button"
+              type="button"
+              onClick={async () => {
+                try {
+                  const google = await firebaseGoogle()
+                  const authResponse = await apiRequest('/auth/firebase/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ id_token: google.idToken }),
+                  })
+                  if (authResponse.user.role !== 'seller') {
+                    setSellerAuthStatus('This account is not registered as a seller account.')
+                    return
                   }
-                }}
-              >
-                Send OTP
-              </button>
-            </div>
+                  establishSession(authResponse)
+                  setSellerAuthStatus('')
+                } catch (error) {
+                  setSellerAuthStatus(error.message)
+                }
+              }}
+            >
+              <GoogleIcon /> Continue with Google
+            </button>
             <button className="seller-primary-button" type="submit">Continue</button>
             <p className="seller-form-status" role="status" aria-live="polite">{sellerAuthStatus}</p>
           </form>
@@ -930,15 +883,19 @@ function App() {
               const nationalId = String(formData.get('nationalId') || '').trim()
               const interestNotifications = formData.get('interestNotifications') === 'accept'
               try {
-                const authResponse = await apiRequest('/auth/register', {
+                const useGoogle = googleSignup?.role === 'seller' && googleSignup.email.toLowerCase() === email
+                const idToken = useGoogle
+                  ? googleSignup.idToken
+                  : await firebaseSignUp(email, String(formData.get('signupPassword') || ''))
+                const authResponse = await apiRequest('/auth/firebase/register', {
                   method: 'POST',
                   body: JSON.stringify({
+                    id_token: idToken,
                     full_name: fullName,
                     email,
                     phone_number: phone,
                     national_id: nationalId,
                     role: 'seller',
-                    otp: String(formData.get('signupOtp') || ''),
                     interest_notifications: interestNotifications,
                   }),
                 })
@@ -1034,46 +991,10 @@ function App() {
                   <input type="text" name="nationalId" autoComplete="off" pattern=".*\S.*" title="Enter your National ID number." required />
                 </label>
               </div>
-              <div className="seller-otp-field">
-                <label className="seller-field">
-                  <span>Phone verification code (OTP)</span>
-                  <input
-                    type="text"
-                    name="signupOtp"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    pattern="[0-9]{6}"
-                    maxLength={6}
-                    placeholder="6-digit code"
-                    required
-                  />
-                </label>
-                <button
-                  className="seller-secondary-button"
-                  type="button"
-                  onClick={async (event) => {
-                    const form = event.currentTarget.form
-                    const values = new FormData(form)
-                    try {
-                      const result = await apiRequest('/auth/otp/request', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                          phone_number: String(values.get('phone') || '').trim(),
-                          email: String(values.get('email') || '').trim().toLowerCase(),
-                          full_name: String(values.get('fullName') || '').trim(),
-                          purpose: 'signup',
-                        }),
-                      })
-                      setSellerAuthStatus(result.message)
-                    } catch (error) {
-                      setSellerAuthStatus(error.message)
-                    }
-                  }}
-                >
-                  Send OTP
-                </button>
-              </div>
-              <p className="seller-privacy-note">Your account is created only after the phone OTP is verified. SMS delivery requires the backend’s Twilio credentials.</p>
+              <label className="seller-field">
+                <span>Password (min. 8 characters)</span>
+                <input type="password" name="signupPassword" autoComplete="new-password" minLength={8} required={googleSignup?.role !== 'seller'} />
+              </label>
             </div>
 
             <fieldset className="seller-notification-choice">
@@ -1275,57 +1196,44 @@ function App() {
                 )}
               </div>
             )}
+            <div className="auth-divider"><span>or</span></div>
+            <button
+              className="google-button"
+              type="button"
+              onClick={async (event) => {
+                const form = event.currentTarget.form
+                try {
+                  const google = await firebaseGoogle()
+                  setGoogleSignup({ role: 'seller', ...google })
+                  form.elements.email.value = google.email
+                  if (!form.elements.fullName.value) form.elements.fullName.value = google.name
+                  setSellerAuthStatus(`Signed in with ${google.email}. Complete the remaining details to finish creating your account.`)
+                } catch (error) {
+                  setSellerAuthStatus(error.message)
+                }
+              }}
+            >
+              <GoogleIcon /> {googleSignup?.role === 'seller' ? `Using ${googleSignup.email} (click to change)` : 'Sign up with Google'}
+            </button>
+            {googleSignup?.role === 'seller' && (
+              <button
+                className="google-remove-button"
+                type="button"
+                onClick={(event) => {
+                  const form = event.currentTarget.form
+                  firebaseSignOut()
+                  setGoogleSignup(null)
+                  form.elements.email.value = ''
+                  setSellerAuthStatus('Google account removed. Choose another or sign up with an email and password.')
+                }}
+              >
+                Remove {googleSignup.email}
+              </button>
+            )}
             <button className="seller-primary-button" type="submit">Create account & prepare listing</button>
             <p className="seller-form-status" role="status" aria-live="polite">{sellerAuthStatus}</p>
           </form>
         )}
-      </div>
-    </section>
-  )
-
-  const renderManagerAccess = () => (
-    <section className="content seller-access-content">
-      <div className="seller-access-heading">
-        <p className="seller-eyebrow">Staff portal</p>
-        <h1>Manager login</h1>
-        <p>Sign in with the manager account provisioned by the backend operator.</p>
-      </div>
-      <div className="seller-access-card">
-        <form
-          className="seller-form"
-          onSubmit={async (event) => {
-            event.preventDefault()
-            const values = new FormData(event.currentTarget)
-            try {
-              const authResponse = await apiRequest('/auth/login', {
-                method: 'POST',
-                body: JSON.stringify({
-                  email: String(values.get('managerLoginEmail') || '').trim().toLowerCase(),
-                  password: values.get('managerLoginPassword'),
-                }),
-              })
-              if (!['manager', 'admin'].includes(authResponse.user.role)) {
-                setManagerAuthStatus('This account does not have manager access.')
-                return
-              }
-              establishSession(authResponse)
-              setManagerAuthStatus('')
-            } catch (error) {
-              setManagerAuthStatus(error.message)
-            }
-          }}
-        >
-          <label className="seller-field">
-            <span>Email address</span>
-            <input type="email" name="managerLoginEmail" autoComplete="username" required />
-          </label>
-          <label className="seller-field">
-            <span>Password</span>
-            <input type="password" name="managerLoginPassword" autoComplete="current-password" required />
-          </label>
-          <button className="seller-primary-button" type="submit">Manager sign in</button>
-          <p className="seller-form-status" role="status" aria-live="polite">{managerAuthStatus}</p>
-        </form>
       </div>
     </section>
   )
@@ -1371,15 +1279,30 @@ function App() {
             onSubmit={async (event) => {
               event.preventDefault()
               const formData = new FormData(event.currentTarget)
-              const phone = String(formData.get('buyerLoginPhone') || '').trim()
-              const otp = String(formData.get('buyerLoginOtp') || '')
+              const loginEmail = String(formData.get('buyerLoginEmail') || '').trim().toLowerCase()
+              const loginPassword = String(formData.get('buyerLoginPassword') || '')
               try {
-                const authResponse = await apiRequest('/auth/otp/verify', {
+                let staffResponse = null
+                try {
+                  staffResponse = await apiRequest('/auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+                  })
+                } catch {
+                  staffResponse = null
+                }
+                if (staffResponse && staffResponse.user.role === 'admin') {
+                  establishSession(staffResponse)
+                  setBuyerAuthStatus('')
+                  return
+                }
+                const idToken = await firebaseSignIn(loginEmail, loginPassword)
+                const authResponse = await apiRequest('/auth/firebase/login', {
                   method: 'POST',
-                  body: JSON.stringify({ phone_number: phone, otp }),
+                  body: JSON.stringify({ id_token: idToken }),
                 })
                 if (authResponse.user.role !== 'buyer') {
-                  setBuyerAuthStatus('This verified phone number is not registered as a buyer account.')
+                  setBuyerAuthStatus('This account is not registered as a buyer account.')
                   return
                 }
                 establishSession(authResponse)
@@ -1391,36 +1314,40 @@ function App() {
           >
             <div className="seller-form-heading">
               <h2>Welcome back</h2>
-              <p>Sign in with your registered mobile number and one-time password.</p>
+              <p>Sign in with your email and password.</p>
             </div>
             <label className="seller-field">
-              <span>Mobile phone number</span>
-              <input type="tel" name="buyerLoginPhone" autoComplete="tel" placeholder="+254 7XX XXX XXX" required />
-            </label>
-            <div className="seller-otp-field">
-              <label className="seller-field">
-                <span>One-time password (OTP)</span>
-                <input type="text" name="buyerLoginOtp" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="6-digit code" required />
+                <span>Email address</span>
+                <input type="email" name="buyerLoginEmail" autoComplete="username" required />
               </label>
-              <button
-                className="seller-secondary-button"
-                type="button"
-                onClick={async (event) => {
-                  const phone = event.currentTarget.form.elements.buyerLoginPhone.value.trim()
-                  try {
-                    const result = await apiRequest('/auth/otp/request', {
-                      method: 'POST',
-                      body: JSON.stringify({ phone_number: phone, purpose: 'login' }),
-                    })
-                    setBuyerAuthStatus(result.message)
-                  } catch (error) {
-                    setBuyerAuthStatus(error.message)
+              <label className="seller-field">
+                <span>Password</span>
+                <input type="password" name="buyerLoginPassword" autoComplete="current-password" required />
+              </label>
+            <div className="auth-divider"><span>or</span></div>
+            <button
+              className="google-button"
+              type="button"
+              onClick={async () => {
+                try {
+                  const google = await firebaseGoogle()
+                  const authResponse = await apiRequest('/auth/firebase/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ id_token: google.idToken }),
+                  })
+                  if (authResponse.user.role !== 'buyer') {
+                    setBuyerAuthStatus('This account is not registered as a buyer account.')
+                    return
                   }
-                }}
-              >
-                Send OTP
-              </button>
-            </div>
+                  establishSession(authResponse)
+                  setBuyerAuthStatus('')
+                } catch (error) {
+                  setBuyerAuthStatus(error.message)
+                }
+              }}
+            >
+              <GoogleIcon /> Continue with Google
+            </button>
             <button className="seller-primary-button" type="submit">Continue</button>
             <p className="seller-form-status" role="status" aria-live="polite">{buyerAuthStatus}</p>
           </form>
@@ -1439,15 +1366,20 @@ function App() {
                 return
               }
               try {
-                const authResponse = await apiRequest('/auth/register', {
+                const buyerEmail = String(formData.get('buyerEmail') || '').trim().toLowerCase()
+                const useGoogle = googleSignup?.role === 'buyer' && googleSignup.email.toLowerCase() === buyerEmail
+                const idToken = useGoogle
+                  ? googleSignup.idToken
+                  : await firebaseSignUp(buyerEmail, String(formData.get('buyerSignupPassword') || ''))
+                const authResponse = await apiRequest('/auth/firebase/register', {
                   method: 'POST',
                   body: JSON.stringify({
+                    id_token: idToken,
                     full_name: String(formData.get('buyerFullName') || '').trim(),
                     email: String(formData.get('buyerEmail') || '').trim().toLowerCase(),
                     phone_number: String(formData.get('buyerPhone') || '').trim(),
                     national_id: String(formData.get('buyerNationalId') || '').trim(),
                     role: 'buyer',
-                    otp: String(formData.get('buyerSignupOtp') || ''),
                   }),
                 })
                 establishSession(authResponse)
@@ -1459,7 +1391,7 @@ function App() {
           >
             <div className="seller-form-heading">
               <h2>Create your buyer account</h2>
-              <p>Provide your contact details and verify your phone. No vehicle information is required.</p>
+              <p>Provide your contact details and choose a password. No vehicle information is required.</p>
             </div>
             <div className="seller-form-grid">
               <label className="seller-field">
@@ -1479,36 +1411,44 @@ function App() {
                 <input type="text" name="buyerNationalId" autoComplete="off" pattern=".*\S.*" title="Enter your National ID number." required />
               </label>
             </div>
-            <div className="seller-otp-field">
-              <label className="seller-field">
-                <span>Phone verification code (OTP)</span>
-                <input type="text" name="buyerSignupOtp" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="6-digit code" required />
+            <label className="seller-field">
+                <span>Password (min. 8 characters)</span>
+                <input type="password" name="buyerSignupPassword" autoComplete="new-password" minLength={8} required={googleSignup?.role !== 'buyer'} />
               </label>
+            <div className="auth-divider"><span>or</span></div>
+            <button
+              className="google-button"
+              type="button"
+              onClick={async (event) => {
+                const form = event.currentTarget.form
+                try {
+                  const google = await firebaseGoogle()
+                  setGoogleSignup({ role: 'buyer', ...google })
+                  form.elements.buyerEmail.value = google.email
+                  if (!form.elements.buyerFullName.value) form.elements.buyerFullName.value = google.name
+                  setBuyerAuthStatus(`Signed in with ${google.email}. Complete the remaining details to finish creating your account.`)
+                } catch (error) {
+                  setBuyerAuthStatus(error.message)
+                }
+              }}
+            >
+              <GoogleIcon /> {googleSignup?.role === 'buyer' ? `Using ${googleSignup.email} (click to change)` : 'Sign up with Google'}
+            </button>
+            {googleSignup?.role === 'buyer' && (
               <button
-                className="seller-secondary-button"
+                className="google-remove-button"
                 type="button"
-                onClick={async (event) => {
-                  const values = new FormData(event.currentTarget.form)
-                  try {
-                    const result = await apiRequest('/auth/otp/request', {
-                      method: 'POST',
-                      body: JSON.stringify({
-                        phone_number: String(values.get('buyerPhone') || '').trim(),
-                        email: String(values.get('buyerEmail') || '').trim().toLowerCase(),
-                        full_name: String(values.get('buyerFullName') || '').trim(),
-                        purpose: 'signup',
-                      }),
-                    })
-                    setBuyerAuthStatus(result.message)
-                  } catch (error) {
-                    setBuyerAuthStatus(error.message)
-                  }
+                onClick={(event) => {
+                  const form = event.currentTarget.form
+                  firebaseSignOut()
+                  setGoogleSignup(null)
+                  form.elements.email.value = ''
+                  setBuyerAuthStatus('Google account removed. Choose another or sign up with an email and password.')
                 }}
               >
-                Send OTP
+                Remove {googleSignup.email}
               </button>
-            </div>
-            <p className="seller-privacy-note">Account creation requires an SMS verification code sent to your phone.</p>
+            )}
             <button className="seller-primary-button" type="submit">Create buyer account</button>
             <p className="seller-form-status" role="status" aria-live="polite">{buyerAuthStatus}</p>
           </form>
@@ -1896,17 +1836,7 @@ function App() {
     if (activeView === 'Cart' && userRole === 'buyer') return renderBuyerCart()
     if (activeView === 'Seller Login' && userRole !== 'seller') return renderSellerAccess()
     if (activeView === 'Buyer Login' && userRole === 'guest') return renderBuyerAccess()
-    if (activeView === 'Manager Login' && userRole === 'guest') return renderManagerAccess()
     if (activeView === 'Settings' && userRole === 'buyer') return renderBuyerSettings()
-    if (activeView === 'Settings' && userRole === 'manager') {
-      return (
-        <section className="content seller-access-content">
-          <h1>Manager settings</h1>
-          <p>{currentUser?.email}</p>
-          <button className="seller-logout-button" type="button" onClick={logout}>Log out</button>
-        </section>
-      )
-    }
     if (activeView === 'Settings' && userRole === 'seller') return renderSettings()
     if (userRole === 'admin') return renderDashboard()
     return renderInventory()

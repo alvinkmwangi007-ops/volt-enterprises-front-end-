@@ -75,7 +75,7 @@ export async function apiRequest(path, options = {}) {
 }
 
 export async function apiDownload(path) {
-  const response = await sendRequest(path, {}, getAccessToken())
+  const response = await sendRequest(path.replace(/^\/api(?=\/)/, ''), {}, getAccessToken())
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}))
     throw new Error(payload.error || 'The private document could not be downloaded.')
@@ -84,5 +84,9 @@ export async function apiDownload(path) {
 }
 
 export function apiUrl(path) {
-  return `${API_BASE_URL}${path}`
+  if (!path || /^(https?:|data:|blob:)/.test(path)) return path
+  // Stored image paths already include the /api prefix (or are static assets).
+  if (path.startsWith('/api/')) return `${API_BASE_URL.replace(/\/api$/, '')}${path}`
+  if (path.startsWith('/')) return path
+  return `${API_BASE_URL}/${path}`
 }
