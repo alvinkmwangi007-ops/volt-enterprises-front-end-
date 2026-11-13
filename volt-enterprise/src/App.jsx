@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import AnimatedDropdown from './components/AnimatedDropdown'
 import { apiDownload, apiRequest, apiUrl, clearAuthSession, getAccessToken, saveAuthSession } from './api'
-import ContentCard from './components/layout/ContentCard'
-import ContentSurface from './components/layout/ContentSurface'
-import DataMetricBlock from './components/layout/DataMetricBlock'
-import NavigationContainer from './components/layout/NavigationContainer'
 import { firebaseGoogle, firebaseSignIn, firebaseSignOut, firebaseSignUp } from './firebase'
 import './App.css'
 
@@ -93,7 +89,7 @@ function App() {
   const [privateDocuments, setPrivateDocuments] = useState([])
   const [documentStatus, setDocumentStatus] = useState('')
   const [interestedVehicleIds, setInterestedVehicleIds] = useState(() => {
-    const savedCart = sessionStorage.getItem('vault-motors-buyer-cart')
+    const savedCart = sessionStorage.getItem('volt-enterprise-buyer-cart')
     if (!savedCart) return []
 
     try {
@@ -158,12 +154,12 @@ function App() {
   const listingModelOptions = vehicleModelsByMake[listingMakeChoice] || []
 
   useEffect(() => {
-    sessionStorage.removeItem('vault-motors-role')
-    sessionStorage.removeItem('vault-motors-vehicle-chats')
+    sessionStorage.removeItem('volt-enterprise-role')
+    sessionStorage.removeItem('volt-enterprise-vehicle-chats')
   }, [])
 
   useEffect(() => {
-    sessionStorage.setItem('vault-motors-buyer-cart', JSON.stringify(interestedVehicleIds))
+    sessionStorage.setItem('volt-enterprise-buyer-cart', JSON.stringify(interestedVehicleIds))
   }, [interestedVehicleIds])
 
   useEffect(() => {
@@ -307,8 +303,7 @@ function App() {
 
   const navItems = useMemo(() => [
     ...(userRole === 'admin' ? [{ label: 'Cashflow Overview', view: 'Dashboard' }] : []),
-    { label: userRole === 'admin' ? 'Inventory' : 'Shop', view: 'Inventory' },
-    ...(userRole === 'seller' ? [{ label: 'My Vehicles', view: 'Seller Login' }] : []),
+    { label: 'Inventory', view: 'Inventory' },
     ...(userRole === 'admin' ? [{ label: 'Customers', view: 'Customers' }] : []),
     ...(userRole === 'admin' ? [{ label: 'Documents', view: 'Documents' }] : []),
     ...(userRole === 'buyer' ? [{ label: 'Cart', view: 'Cart' }] : []),
@@ -338,8 +333,8 @@ function App() {
     setSelectedVehicle(null)
     setActiveView('Inventory')
     setInterestedVehicleIds([])
-    sessionStorage.removeItem('vault-motors-buyer-cart')
-    sessionStorage.removeItem('vault-motors-role')
+    sessionStorage.removeItem('volt-enterprise-buyer-cart')
+    sessionStorage.removeItem('volt-enterprise-role')
     setChatMessages([])
     setChatInquiryId(null)
   }
@@ -609,13 +604,13 @@ function App() {
         <button type="button" onClick={exportPdf}>Export PDF</button>
       </div>
 
-      <div className="metric-grid">
-        <DataMetricBlock label="Total income" value={`KES ${salesData.reduce((sum, item) => sum + item.income, 0).toLocaleString()}`} />
-        <DataMetricBlock label="Total expenses" value={`KES ${salesData.reduce((sum, item) => sum + item.expenses, 0).toLocaleString()}`} />
-        <DataMetricBlock label="Net" value={`KES ${salesData.reduce((sum, item) => sum + item.income - item.expenses, 0).toLocaleString()}`} />
+      <div className="cashflow-summary">
+        <div><span>Total income</span><strong>KES {salesData.reduce((sum, item) => sum + item.income, 0).toLocaleString()}</strong></div>
+        <div><span>Total expenses</span><strong>KES {salesData.reduce((sum, item) => sum + item.expenses, 0).toLocaleString()}</strong></div>
+        <div><span>Net</span><strong>KES {salesData.reduce((sum, item) => sum + item.income - item.expenses, 0).toLocaleString()}</strong></div>
       </div>
 
-      <ContentCard className="cashflow-card">
+      <div className="cashflow-card">
         {salesData.length === 0 && <p className="seller-privacy-note">No completed sales data is available yet.</p>}
         {salesData.length > 0 && <p className="seller-privacy-note">Operating expenses are not tracked by the backend yet.</p>}
         <div className="chart-area">
@@ -660,7 +655,7 @@ function App() {
             })}
           </svg>
         </div>
-      </ContentCard>
+      </div>
     </section>
   )
 
@@ -1849,17 +1844,55 @@ function App() {
 
   return (
     <div className="dashboard-shell">
-      <NavigationContainer
-        items={navItems.map((item) => ({
-          label: item.label,
-          path: item.view,
-          badge: item.label === 'Cart' ? interestedVehicleIds.length : 0,
-        }))}
-        activePath={activeView}
-        onNavigate={setActiveView}
-      />
+      <aside className="sidebar">
+        <div className="brand">
+          <span className="brand-mark">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6.5 7.8A7.5 7.5 0 0 1 14.2 5h.5v2.6h-3.1a4.4 4.4 0 0 0-4.4 4.4v.8h2.5v-2.3c0-.9.6-1.5 1.4-1.5h1.2c.8 0 1.4.6 1.4 1.5v1.7H15v2.6h-2.7v3.5h-2.6v-3.5H7.2v-2.6h3.1v-1.5A4.4 4.4 0 0 0 6.5 7.8Zm2.1 7.7h2.6v2.7H8.6v-2.7Z" fill="currentColor" />
+              <path d="M4.6 12.5a7.4 7.4 0 0 1 14.8 0v.8a7.4 7.4 0 0 1-14.8 0v-.8Zm7.4 5.3a5.2 5.2 0 0 0 5.2-5.2v-.3a5.2 5.2 0 0 0-10.4 0v.3a5.2 5.2 0 0 0 5.2 5.2Z" fill="currentColor" opacity="0.75" />
+            </svg>
+          </span>
+          Vault Motors
+        </div>
 
-      <ContentSurface>
+        <nav className="sidebar-nav" aria-label="Sidebar navigation">
+          {navItems.map((item) => (
+            <button
+              key={item.label}
+              className={`nav-item${activeView === item.view ? ' active' : ''}`}
+              type="button"
+              onClick={() => setActiveView(item.view)}
+            >
+              <span className="nav-icon">
+                {item.label === 'Dashboard' && (
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.8V5.5h7.5v7.3H4Zm8.5 0V4h7.5v8.8h-7.5ZM4 18.5v-5.4h7.5v5.4H4Zm8.5 0v-3.7h7.5v3.7h-7.5Z" fill="currentColor" /></svg>
+                )}
+                {item.label === 'Inventory' && (
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5V6.2A2.2 2.2 0 0 1 9.7 4h4.6a2.2 2.2 0 0 1 2.2 2.2v2.3h1.5c1.1 0 2 .9 2 2v7.8a2.1 2.1 0 0 1-2 2.1H6c-1.1 0-2-.9-2-2.1V10.5c0-1.1.9-2 2-2h1.5Zm2 0h5V6.2a.7.7 0 0 0-.7-.7H10.2a.7.7 0 0 0-.7.7V8.5Z" fill="currentColor" /></svg>
+                )}
+                {item.label === 'Cart' && (
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.1 10.1a2 2 0 0 0 2 1.6h8.3a2 2 0 0 0 1.9-1.4L21 8H6M10 20a1.2 1.2 0 1 0 0-2.4A1.2 1.2 0 0 0 10 20Zm7 0a1.2 1.2 0 1 0 0-2.4A1.2 1.2 0 0 0 17 20Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                )}
+                {item.label === 'Customers' && (
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 10.8a3.3 3.3 0 1 1 6.6 0 3.3 3.3 0 0 1-6.6 0Zm8.6 1.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Zm-11.3 2.5c0-1.8 2.1-3.1 4.8-3.1 2.6 0 4.8 1.3 4.8 3.1v1.6H4.5v-1.6Zm13.8 0c0-1.3 1.4-2.3 3.2-2.8v1.7c-.8.3-1.4.8-1.7 1.3v1.4h-1.5v-1.6Z" fill="currentColor" /></svg>
+                )}
+                {(item.label === 'Seller Login' || item.label === 'Buyer Login') && (
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.1 0-7 2.1-7 4.5V21h14v-2.5c0-2.4-2.9-4.5-7-4.5Z" fill="currentColor" /></svg>
+                )}
+                {item.label === 'Settings' && (
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.7 7.7 0 0 0 0-2l2-1.5-2-3.4-2.4 1a7.7 7.7 0 0 0-1.7-1L15 3.5h-4l-.4 2.6a7.7 7.7 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.5a7.7 7.7 0 0 0 0 2l-2 1.5 2 3.4 2.4-1a7.7 7.7 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.7 7.7 0 0 0 1.7-1l2.4 1 2-3.4-2.1-1.5ZM13 14.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z" fill="currentColor" /></svg>
+                )}
+              </span>
+              <span>{item.label}</span>
+              {item.label === 'Cart' && interestedVehicleIds.length > 0 && (
+                <span className="cart-count" aria-label={`${interestedVehicleIds.length} vehicles in cart`}>{interestedVehicleIds.length}</span>
+              )}
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      <main className="main-panel">
         <header className="topbar">
           <div className="topbar-actions">
             <button className="icon-button" type="button" aria-label="settings" onClick={() => setActiveView('Settings')}>
@@ -1876,7 +1909,7 @@ function App() {
         <footer className="app-footer">
           © {new Date().getFullYear()} Vault Motors. All rights reserved.
         </footer>
-      </ContentSurface>
+      </main>
       {selectedVehicle && (
         <div
           className="vehicle-modal-backdrop"
