@@ -1008,7 +1008,7 @@ function App() {
                 </label>
               </div>
               <label className="seller-field">
-                <span>Password (min. 8 characters)</span>
+                <span>Password (min. 8 characters, with uppercase, lowercase, number and special character)</span>
                 <input type="password" name="signupPassword" autoComplete="new-password" minLength={8} required={googleSignup?.role !== 'seller'} />
               </label>
             </div>
@@ -1428,7 +1428,7 @@ function App() {
               </label>
             </div>
             <label className="seller-field">
-                <span>Password (min. 8 characters)</span>
+                <span>Password (min. 8 characters, with uppercase, lowercase, number and special character)</span>
                 <input type="password" name="buyerSignupPassword" autoComplete="new-password" minLength={8} required={googleSignup?.role !== 'buyer'} />
               </label>
             <div className="auth-divider"><span>or</span></div>

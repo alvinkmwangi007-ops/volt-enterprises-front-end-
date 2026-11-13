@@ -32,7 +32,7 @@ const ERROR_MESSAGES = {
   'auth/user-not-found': 'Invalid email or password.',
   'auth/wrong-password': 'Invalid email or password.',
   'auth/email-already-in-use': 'An account already uses that email address.',
-  'auth/weak-password': 'Choose a password with at least 8 characters.',
+  'auth/weak-password': 'Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number and a special character.',
   'auth/too-many-requests': 'Too many attempts. Try again later.',
   'auth/network-request-failed': 'Network error. Check your connection and try again.',
   'auth/unauthorized-domain': 'This website address is not authorised for Google sign-in. Add it under Firebase Console > Authentication > Settings > Authorized domains.',
@@ -56,7 +56,22 @@ export async function firebaseSignIn(email, password) {
   }
 }
 
+export const PASSWORD_RULES_TEXT =
+  'Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number and a special character (e.g. ! @ # $).'
+
+export function isStrongPassword(password) {
+  return (
+    typeof password === 'string' &&
+    password.length >= 8 &&
+    /[A-Z]/.test(password) &&
+    /[a-z]/.test(password) &&
+    /[0-9]/.test(password) &&
+    /[^A-Za-z0-9]/.test(password)
+  )
+}
+
 export async function firebaseSignUp(email, password) {
+  if (!isStrongPassword(password)) throw new Error(PASSWORD_RULES_TEXT)
   try {
     const credential = await createUserWithEmailAndPassword(auth, email, password)
     return await credential.user.getIdToken()
