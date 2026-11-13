@@ -789,6 +789,20 @@ function App() {
               const loginEmail = String(formData.get('loginEmail') || '').trim().toLowerCase()
               const loginPassword = String(formData.get('loginPassword') || '')
               try {
+                let staffResponse = null
+                try {
+                  staffResponse = await apiRequest('/auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+                  })
+                } catch {
+                  staffResponse = null
+                }
+                if (staffResponse && staffResponse.user.role === 'admin') {
+                  establishSession(staffResponse)
+                  setSellerAuthStatus('')
+                  return
+                }
                 const idToken = await firebaseSignIn(loginEmail, loginPassword)
                 const authResponse = await apiRequest('/auth/firebase/login', {
                   method: 'POST',
