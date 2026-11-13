@@ -1,7 +1,7 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5000/api')
   .replace(/\/+$/, '')
-const ACCESS_TOKEN_KEY = 'volt-enterprise-access-token'
-const REFRESH_TOKEN_KEY = 'volt-enterprise-refresh-token'
+const ACCESS_TOKEN_KEY = 'vault-motors-access-token'
+const REFRESH_TOKEN_KEY = 'vault-motors-refresh-token'
 
 export function getAccessToken() {
   return sessionStorage.getItem(ACCESS_TOKEN_KEY)
